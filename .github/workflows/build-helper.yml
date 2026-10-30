@@ -17,7 +17,7 @@ jobs:
   build:
     name: Build Android 14 KeepAlive APK
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -35,20 +35,30 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: "15859902"
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
 
-      - name: Install Android SDK packages
+      - name: Verify Android SDK
         shell: bash
         run: |
           set -euxo pipefail
 
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
-          yes | sdkmanager --licenses || true
+          sdkmanager --version
+          adb version
+
+          test -d "$ANDROID_SDK_ROOT/platforms/android-35"
+          test -d "$ANDROID_SDK_ROOT/build-tools/35.0.0"
 
       - name: Check project files
         shell: bash
@@ -68,15 +78,29 @@ jobs:
           grep -q "compileSdk 35" app/build.gradle
           grep -q 'foregroundServiceType="dataSync"' app/src/main/AndroidManifest.xml
 
-          echo "Project checks passed."
+          echo "Project file checks passed."
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Check Java source
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          grep -q "package org.bilibilidl.keepalive;" \
+            app/src/main/java/org/bilibilidl/keepalive/MainActivity.java
+
+          grep -q "package org.bilibilidl.keepalive;" \
+            app/src/main/java/org/bilibilidl/keepalive/KeepAliveService.java
+
+          echo "Java source checks passed."
 
       - name: Build debug APK
         shell: bash
         run: |
           set -euxo pipefail
+
           gradle --no-daemon clean assembleDebug
 
       - name: Verify APK
@@ -105,11 +129,11 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload build logs
+      - name: Upload build reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bilibilidl-keepalive-build-logs
+          name: bilibilidl-keepalive-build-reports
           path: app/build/reports/
           if-no-files-found: ignore
           retention-days: 7
