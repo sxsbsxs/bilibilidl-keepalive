@@ -20,8 +20,8 @@ jobs:
     timeout-minutes: 60
 
     env:
-      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
-      ANDROID_HOME: ${{ runner.temp }}/android-sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
       GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx2048m -Dorg.gradle.parallel=false"
       PYTHONUNBUFFERED: "1"
 
@@ -42,27 +42,31 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+
           sdkmanager --install \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
+
           yes | sdkmanager --licenses || true
 
       - name: Check project files
         shell: bash
         run: |
           set -euxo pipefail
+
           test -f settings.gradle
           test -f build.gradle
           test -f gradle.properties
           test -f app/build.gradle
           test -f app/src/main/AndroidManifest.xml
+
           test -f app/src/main/java/org/bilibilidl/keepalive/MainActivity.java
           test -f app/src/main/java/org/bilibilidl/keepalive/KeepAliveService.java
 
           grep -q "targetSdk 34" app/build.gradle
           grep -q "compileSdk 35" app/build.gradle
-          grep -q "foregroundServiceType=\"dataSync\"" app/src/main/AndroidManifest.xml
+          grep -q 'foregroundServiceType="dataSync"' app/src/main/AndroidManifest.xml
 
           echo "Project checks passed."
 
@@ -79,17 +83,21 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+
           APK="app/build/outputs/apk/debug/app-debug.apk"
+
           test -s "$APK"
 
           mkdir -p /tmp/apk-check
           unzip -q "$APK" -d /tmp/apk-check
 
           test -f /tmp/apk-check/classes.dex
+
           echo "APK build verification passed."
           ls -lh "$APK"
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: bilibilidl-keepalive-android14
@@ -102,7 +110,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bilibilidl-keepalive-build-logs
-          path: |
-            app/build/reports/
+          path: app/build/reports/
           if-no-files-found: ignore
           retention-days: 7
